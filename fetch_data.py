@@ -70,6 +70,16 @@ plt.legend()
 plt.savefig("price_vs_points.png")
 plt.show()
 
+top10_points = filtered_df.sort_values("total_points", ascending=False).head(10)
+plt.barh(top10_points["web_name"], top10_points["total_points"])
+plt.gca().invert_yaxis()
+plt.xlabel("Total points")
+plt.title("Top 10 players by total points")
+plt.tight_layout()
+plt.savefig("top_points.png")
+plt.show()
+
+
 
 
 
