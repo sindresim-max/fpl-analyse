@@ -60,10 +60,13 @@ filtered_df["points_per_90"] = filtered_df["total_points"] / filtered_df["minute
 top_quality = filtered_df[filtered_df["minutes"] >= 450].sort_values("points_per_90", ascending=False)
 print(top_quality[["web_name", "team_name", "position", "price", "minutes", "points_per_90"]].head(10))
 
-plt.scatter(filtered_df["price"], filtered_df["total_points"])
+top10 = top_value.head(10)
+plt.scatter(filtered_df["price"], filtered_df["total_points"], color="lightgray", label="All players")
+plt.scatter(top10["price"], top10["total_points"], color="red", label="Top 10 value")
 plt.xlabel("Price (million)")
 plt.ylabel("Total points")
 plt.title("Price vs total points")
+plt.legend()
 plt.show()
 
 
