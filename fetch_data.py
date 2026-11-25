@@ -38,3 +38,10 @@ filtered_df["points_per_million"] = filtered_df["total_points"] / filtered_df["p
 top_value = filtered_df.sort_values("points_per_million", ascending=False)
 print(top_value[["web_name", "team_name", "position", "price", "total_points", "points_per_million"]].head(10))
 
+position_summary = filtered_df.groupby("position")["points_per_million"].mean()
+print(position_summary)
+
+best_per_position = top_value.groupby("position").head(3)
+best_per_position = best_per_position.sort_values(["position", "points_per_million"], ascending=[True, False])
+print(best_per_position[["web_name", "team_name", "position", "price", "points_per_million"]])
+
