@@ -67,7 +67,9 @@ plt.xlabel("Price (million)")
 plt.ylabel("Total points")
 plt.title("Price vs total points")
 plt.legend()
+plt.savefig("price_vs_points.png")
 plt.show()
+
 
 
 
