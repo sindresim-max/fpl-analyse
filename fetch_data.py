@@ -45,3 +45,13 @@ best_per_position = top_value.groupby("position").head(3)
 best_per_position = best_per_position.sort_values(["position", "points_per_million"], ascending=[True, False])
 print(best_per_position[["web_name", "team_name", "position", "price", "points_per_million"]])
 
+bins = [0, 5, 6, 7, 8, 9, 20]
+labels = ["under 5", "5-6", "6-7", "7-8", "8-9", "9+"]
+filtered_df["price_band"] = pd.cut(filtered_df["price"], bins=bins, labels=labels, right=False)
+print(filtered_df["price_band"].value_counts())
+
+best_by_band = filtered_df.sort_values("points_per_million", ascending=False)
+best_by_band = best_by_band.groupby(["position", "price_band"], observed=True).head(1)
+best_by_band = best_by_band.sort_values(["position", "price_band"])
+print(best_by_band[["position", "price_band", "web_name", "team_name", "price", "points_per_million"]])
+
