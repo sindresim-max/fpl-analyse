@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+import matplotlib.pyplot as plt
 
 response = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/")
 
@@ -54,4 +55,16 @@ best_by_band = filtered_df.sort_values("points_per_million", ascending=False)
 best_by_band = best_by_band.groupby(["position", "price_band"], observed=True).head(1)
 best_by_band = best_by_band.sort_values(["position", "price_band"])
 print(best_by_band[["position", "price_band", "web_name", "team_name", "price", "points_per_million"]])
+
+filtered_df["points_per_90"] = filtered_df["total_points"] / filtered_df["minutes"] * 90
+top_quality = filtered_df[filtered_df["minutes"] >= 450].sort_values("points_per_90", ascending=False)
+print(top_quality[["web_name", "team_name", "position", "price", "minutes", "points_per_90"]].head(10))
+
+plt.scatter(filtered_df["price"], filtered_df["total_points"])
+plt.xlabel("Price (million)")
+plt.ylabel("Total points")
+plt.title("Price vs total points")
+plt.show()
+
+
 
