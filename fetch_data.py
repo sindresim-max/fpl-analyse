@@ -120,12 +120,29 @@ print(filtered_df["difficulty"].isna().sum())
 def suggest_transfer(player_name):
     player = my_team[my_team["web_name"] == player_name].iloc[0]
     budget = player["price"] + bank
+    full_teams = my_team[my_team["web_name"] != player_name]["team_name"].value_counts()[lambda counts: counts >= 3].index
     candidates = filtered_df[
         (filtered_df["position"] == player["position"])
         & (filtered_df["price"] <= budget)
         & (~filtered_df["web_name"].isin(my_team["web_name"]))
+        & (~filtered_df["team_name"].isin(full_teams))
     ].copy()
     candidates["score"] = candidates["points_per_game"] / candidates["difficulty"]
-    return candidates.sort_values("score", ascending=False).head(3)
+    return candidates.sort_values(["score", "price"], ascending=[False, True]).head(3)
 
-print(suggest_transfer("van Ewijk")[["web_name", "team_name", "price", "points_per_game", "difficulty", "score"]])
+print(suggest_transfer("Vuskovic")[["web_name", "team_name", "price", "points_per_game", "difficulty", "score"]])
+
+my_team = my_team.merge(team_difficulty[["team_name", "difficulty"]], on="team_name", how="left")
+my_team["score"] = pd.to_numeric(my_team["points_per_game"]) / my_team["difficulty"]
+
+suggestions = []
+for name in my_team["web_name"]:
+    best = suggest_transfer(name)
+    if len(best) > 0:
+        own_score = my_team[my_team["web_name"] == name]["score"].iloc[0]
+        suggestions.append({"sell": name, "own_score": own_score, "buy": best["web_name"].iloc[0], "buy_price": best["price"].iloc[0], "buy_score": best["score"].iloc[0]})
+
+suggestions_df = pd.DataFrame(suggestions)
+suggestions_df["gain"] = suggestions_df["buy_score"] - suggestions_df["own_score"]
+print(suggestions_df.sort_values("gain", ascending=False))
+
