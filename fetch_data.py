@@ -68,7 +68,8 @@ plt.ylabel("Total points")
 plt.title("Price vs total points")
 plt.legend()
 plt.savefig("price_vs_points.png")
-plt.show()
+plt.clf()
+#plt.show()
 
 top10_points = filtered_df.sort_values("total_points", ascending=False).head(10)
 plt.barh(top10_points["web_name"], top10_points["total_points"])
@@ -77,7 +78,26 @@ plt.xlabel("Total points")
 plt.title("Top 10 players by total points")
 plt.tight_layout()
 plt.savefig("top_points.png")
-plt.show()
+#plt.show()
+
+entry_url = "https://fantasy.premierleague.com/api/entry/6803366/"
+entry_data = requests.get(entry_url).json()
+print(entry_data.keys())
+print(entry_data["name"], entry_data["current_event"])
+
+gw = entry_data["current_event"]
+picks_url = f"https://fantasy.premierleague.com/api/entry/6803366/event/{gw}/picks/"
+picks_data = requests.get(picks_url).json()
+my_team = pd.DataFrame(picks_data["picks"])
+my_team = my_team.merge(players_df, left_on="element", right_on="id")
+print(my_team[["web_name", "team_name", "position_y", "price", "total_points", "is_captain"]])
+
+my_team = my_team.rename(columns={"position_y": "position"})
+my_team["points_per_million"] = my_team["total_points"] / my_team["price"]
+my_team["price_band"] = pd.cut(my_team["price"], bins=bins, labels=labels, right=False)
+comparison = my_team.merge(best_by_band, on=["position", "price_band"], how="left", suffixes=("_mine", "_best"))
+print(comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]])
+
 
 
 
