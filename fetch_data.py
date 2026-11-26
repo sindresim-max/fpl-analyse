@@ -146,3 +146,10 @@ suggestions_df = pd.DataFrame(suggestions)
 suggestions_df["gain"] = suggestions_df["buy_score"] - suggestions_df["own_score"]
 print(suggestions_df.sort_values("gain", ascending=False))
 
+with pd.ExcelWriter("fpl_report.xlsx", engine="openpyxl") as writer:
+    suggestions_df.sort_values("gain", ascending=False).to_excel(writer, sheet_name="Transfers", index=False)
+    comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]].to_excel(writer, sheet_name="My team", index=False)
+    best_by_band[["position", "price_band", "web_name", "team_name", "price", "points_per_million"]].to_excel(writer, sheet_name="Best by price band", index=False)
+    team_difficulty.sort_values("difficulty").to_excel(writer, sheet_name="Fixtures", index=False)
+print("Report saved: fpl_report.xlsx")
+
