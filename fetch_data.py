@@ -80,13 +80,14 @@ plt.tight_layout()
 plt.savefig("top_points.png")
 #plt.show()
 
-entry_url = "https://fantasy.premierleague.com/api/entry/6803366/"
+team_id = 6803366
+entry_url = f"https://fantasy.premierleague.com/api/entry/{team_id}/"
 entry_data = requests.get(entry_url).json()
 print(entry_data.keys())
 print(entry_data["name"], entry_data["current_event"])
 
 gw = entry_data["current_event"]
-picks_url = f"https://fantasy.premierleague.com/api/entry/6803366/event/{gw}/picks/"
+picks_url = f"https://fantasy.premierleague.com/api/entry/{team_id}/event/{gw}/picks/"
 picks_data = requests.get(picks_url).json()
 my_team = pd.DataFrame(picks_data["picks"])
 my_team = my_team.merge(players_df, left_on="element", right_on="id")
@@ -98,8 +99,33 @@ my_team["price_band"] = pd.cut(my_team["price"], bins=bins, labels=labels, right
 comparison = my_team.merge(best_by_band, on=["position", "price_band"], how="left", suffixes=("_mine", "_best"))
 print(comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]])
 
+bank = entry_data["last_deadline_bank"]
+bank = bank / 10
+print(bank)
 
+fixtures_url = "https://fantasy.premierleague.com/api/fixtures/"
+fixtures_df = pd.DataFrame(requests.get(fixtures_url).json())
+next_fixtures = fixtures_df[(fixtures_df["event"] > gw) & (fixtures_df["event"] <= gw + 3)]
+home = next_fixtures[["team_h", "team_h_difficulty"]].rename(columns={"team_h": "team", "team_h_difficulty": "difficulty"})
+away = next_fixtures[["team_a", "team_a_difficulty"]].rename(columns={"team_a": "team", "team_a_difficulty": "difficulty"})
+team_difficulty = pd.concat([home, away]).groupby("team")["difficulty"].mean()
+team_map = players_df[["team", "team_name"]].drop_duplicates()
+team_difficulty = team_difficulty.reset_index().merge(team_map, on="team")
+print(team_difficulty.sort_values("difficulty"))
 
+filtered_df = filtered_df.merge(team_difficulty[["team_name", "difficulty"]], on="team_name", how="left")
+print(filtered_df[["web_name", "team_name", "position", "price", "difficulty"]].sort_values("difficulty").head(10))
+print(filtered_df["difficulty"].isna().sum())
 
+def suggest_transfer(player_name):
+    player = my_team[my_team["web_name"] == player_name].iloc[0]
+    budget = player["price"] + bank
+    candidates = filtered_df[
+        (filtered_df["position"] == player["position"])
+        & (filtered_df["price"] <= budget)
+        & (~filtered_df["web_name"].isin(my_team["web_name"]))
+    ].copy()
+    candidates["score"] = candidates["points_per_game"] / candidates["difficulty"]
+    return candidates.sort_values("score", ascending=False).head(3)
 
-
+print(suggest_transfer("van Ewijk")[["web_name", "team_name", "price", "points_per_game", "difficulty", "score"]])
