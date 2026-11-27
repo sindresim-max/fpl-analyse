@@ -182,8 +182,16 @@ best_alt = not_owned.loc[best_idx, ["position", "price_band", "web_name", "point
 mine = filtered_df[filtered_df["web_name"].isin(my_team["web_name"])][["web_name", "position", "price_band", "points_per_million"]]
 comparison = mine.merge(best_alt, on=["position", "price_band"], how="left", suffixes=("_mine", "_best")).sort_values(["position", "points_per_million_mine"], ascending=[True, False])
 
+xgi_df = filtered_df[["web_name", "team_name", "position", "price"]].merge(players_df[["web_name", "team_name", "expected_goal_involvements_per_90"]], on=["web_name", "team_name"], how="left")
+xgi_df["xgi90"] = pd.to_numeric(xgi_df["expected_goal_involvements_per_90"])
+xgi_df["owned"] = xgi_df["web_name"].isin(my_team["web_name"]).map({True: "Yes", False: "No"})
+top_xgi = xgi_df[xgi_df["position"].isin(["MID", "FWD"])].sort_values("xgi90", ascending=False).head(15)
+
+
 report_sheets = {
     "Summary": summary_df,
+        "Top xGI": top_xgi[["web_name", "team_name", "position", "price", "xgi90", "owned"]].rename(columns={
+        "web_name": "Player", "team_name": "Team", "position": "Position", "price": "Price (m)", "xgi90": "xGI per 90", "owned": "Owned"}),
     "Transfers": suggestions_df.sort_values("gain", ascending=False).rename(columns={
         "sell": "Sell", "own_score": "Own score", "buy": "Buy", "buy_price": "Buy price (m)", "buy_score": "Buy score", "gain": "Gain"}),
     "My team": comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]].rename(columns={
