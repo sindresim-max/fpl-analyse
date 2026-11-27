@@ -182,16 +182,14 @@ best_alt = not_owned.loc[best_idx, ["position", "price_band", "web_name", "point
 mine = filtered_df[filtered_df["web_name"].isin(my_team["web_name"])][["web_name", "position", "price_band", "points_per_million"]]
 comparison = mine.merge(best_alt, on=["position", "price_band"], how="left", suffixes=("_mine", "_best")).sort_values(["position", "points_per_million_mine"], ascending=[True, False])
 
-xgi_df = filtered_df[["web_name", "team_name", "position", "price"]].merge(players_df[["web_name", "team_name", "expected_goal_involvements_per_90"]], on=["web_name", "team_name"], how="left")
+xgi_df = filtered_df[["web_name", "team_name", "position", "price"]].merge(players_df[["web_name", "team_name", "expected_goal_involvements_per_90", "starts", "minutes"]], on=["web_name", "team_name"], how="left")
 xgi_df["xgi90"] = pd.to_numeric(xgi_df["expected_goal_involvements_per_90"])
 xgi_df["owned"] = xgi_df["web_name"].isin(my_team["web_name"]).map({True: "Yes", False: "No"})
-top_xgi = xgi_df[xgi_df["position"].isin(["MID", "FWD"])].sort_values("xgi90", ascending=False).head(15)
-
-
+top_xgi = xgi_df[(xgi_df["position"].isin(["MID", "FWD"])) & (xgi_df["starts"] >= gw * 0.6) & (xgi_df["web_name"].isin(filtered_df[filtered_df["chance_of_playing_next_round"] >= 75]["web_name"]))].sort_values("xgi90", ascending=False).head(15)
 report_sheets = {
     "Summary": summary_df,
-        "Top xGI": top_xgi[["web_name", "team_name", "position", "price", "xgi90", "owned"]].rename(columns={
-        "web_name": "Player", "team_name": "Team", "position": "Position", "price": "Price (m)", "xgi90": "xGI per 90", "owned": "Owned"}),
+        "Top xGI": top_xgi[["web_name", "team_name", "position", "price", "starts", "minutes", "xgi90", "owned"]].rename(columns={
+        "web_name": "Player", "team_name": "Team", "position": "Position", "price": "Price (m)", "starts": "Starts", "minutes": "Minutes", "xgi90": "xGI per 90", "owned": "Owned"}),
     "Transfers": suggestions_df.sort_values("gain", ascending=False).rename(columns={
         "sell": "Sell", "own_score": "Own score", "buy": "Buy", "buy_price": "Buy price (m)", "buy_score": "Buy score", "gain": "Gain"}),
     "My team": comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]].rename(columns={
@@ -202,7 +200,7 @@ report_sheets = {
     "Fixtures": team_difficulty.sort_values("difficulty")[["team_name", "difficulty"]].rename(columns={
         "team_name": "Team", "difficulty": "Average difficulty, next 3 rounds"}),
 }
-tab_colors = ["1F4E78", "2E75B6", "548235", "BF8F00", "C00000"]
+tab_colors = ["1F4E78", "2E75B6", "548235", "BF8F00", "C00000", "7030A0"]
 green_to_red = ColorScaleRule(start_type="min", start_color="63BE7B", mid_type="percentile", mid_value=50, mid_color="FFFFFF", end_type="max", end_color="F8696B")
 red_to_green = ColorScaleRule(start_type="min", start_color="F8696B", mid_type="num", mid_value=0, mid_color="FFFFFF", end_type="max", end_color="63BE7B")
 
@@ -212,7 +210,7 @@ with pd.ExcelWriter("fpl_report.xlsx", engine="openpyxl") as writer:
         sheet = writer.sheets[name]
         sheet["A1"] = f"FPL report: {entry_data['name']}" if name == "Summary" else name
         sheet["A1"].font = Font(size=16, bold=True, color="1F4E78")
-        sheet["A2"] = f"Gameweek {gw}. Data from the official FPL API."
+        sheet["A2"] = f"Gameweek {gw}. Data from the FPL API."
         sheet["A2"].font = Font(italic=True, color="808080")
         sheet.sheet_view.showGridLines = False
         sheet.sheet_properties.tabColor = tab_colors[i]
@@ -233,3 +231,4 @@ with pd.ExcelWriter("fpl_report.xlsx", engine="openpyxl") as writer:
     fixtures.conditional_formatting.add(f"B4:B{fixtures.max_row}", green_to_red)
 print("Report saved: fpl_report.xlsx")
 
+print(filtered_df[filtered_df["web_name"] == "Wirtz"][["web_name", "team_name", "position", "price", "price_band", "points_per_million", "chance_of_playing_next_round"]])
