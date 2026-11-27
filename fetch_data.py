@@ -160,6 +160,22 @@ summary_df = pd.DataFrame({
     "Value": [entry_data["name"], gw, entry_data["summary_overall_points"], bank, best_move["sell"] + " -> " + best_move["buy"], round(best_move["gain"], 2)],
 })
 
+starters = [pick["element"] for pick in picks_data["picks"] if pick["multiplier"] > 0]
+captain_pool = my_team[["id", "web_name", "team_name", "position", "difficulty"]].merge(players_df[["web_name", "team_name", "expected_goal_involvements_per_90", "form", "chance_of_playing_next_round"]], on=["web_name", "team_name"], how="left")
+captain_pool["chance_of_playing_next_round"] = captain_pool["chance_of_playing_next_round"].fillna(100)
+captain_pool = captain_pool[(captain_pool["position"].isin(["MID", "FWD"])) & (captain_pool["chance_of_playing_next_round"] >= 75) & (captain_pool["id"].isin(starters))].copy()
+captain_pool["xgi90"] = pd.to_numeric(captain_pool["expected_goal_involvements_per_90"])
+captain_pool["form_num"] = pd.to_numeric(captain_pool["form"])
+captain_pool["captain_score"] = (0.7 * captain_pool["xgi90"] * 5 + 0.3 * captain_pool["form_num"]) * (1 + (3 - captain_pool["difficulty"]) * 0.1)
+captains = captain_pool.sort_values("captain_score", ascending=False).head(3)
+print(captain_pool.sort_values("captain_score", ascending=False)[["web_name", "xgi90", "form_num", "difficulty", "captain_score"]])
+
+captain_rows = pd.DataFrame({
+    "Metric": ["Captain pick 1", "Captain pick 2", "Captain pick 3"],
+    "Value": [f"{name} ({score:.2f})" for name, score in zip(captains["web_name"], captains["captain_score"])],
+})
+summary_df = pd.concat([summary_df, captain_rows], ignore_index=True)
+
 not_owned = filtered_df[(~filtered_df["web_name"].isin(my_team["web_name"])) & (filtered_df["chance_of_playing_next_round"] >= 75)]
 best_idx = not_owned.groupby(["position", "price_band"], observed=True)["points_per_million"].idxmax()
 best_alt = not_owned.loc[best_idx, ["position", "price_band", "web_name", "points_per_million"]]
@@ -209,4 +225,3 @@ with pd.ExcelWriter("fpl_report.xlsx", engine="openpyxl") as writer:
     fixtures.conditional_formatting.add(f"B4:B{fixtures.max_row}", green_to_red)
 print("Report saved: fpl_report.xlsx")
 
-print(filtered_df[filtered_df["chance_of_playing_next_round"] < 75][["web_name", "team_name", "chance_of_playing_next_round", "news"]])
