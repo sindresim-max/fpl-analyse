@@ -1,6 +1,10 @@
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
+from openpyxl.drawing.image import Image
+from openpyxl.styles import Font
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.formatting.rule import ColorScaleRule
 
 response = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/")
 
@@ -114,8 +118,11 @@ team_difficulty = team_difficulty.reset_index().merge(team_map, on="team")
 print(team_difficulty.sort_values("difficulty"))
 
 filtered_df = filtered_df.merge(team_difficulty[["team_name", "difficulty"]], on="team_name", how="left")
+filtered_df = filtered_df.merge(players_df[["web_name", "team_name", "chance_of_playing_next_round", "news"]], on=["web_name", "team_name"], how="left")
+filtered_df["chance_of_playing_next_round"] = filtered_df["chance_of_playing_next_round"].fillna(100)
 print(filtered_df[["web_name", "team_name", "position", "price", "difficulty"]].sort_values("difficulty").head(10))
 print(filtered_df["difficulty"].isna().sum())
+
 
 def suggest_transfer(player_name):
     player = my_team[my_team["web_name"] == player_name].iloc[0]
@@ -126,6 +133,7 @@ def suggest_transfer(player_name):
         & (filtered_df["price"] <= budget)
         & (~filtered_df["web_name"].isin(my_team["web_name"]))
         & (~filtered_df["team_name"].isin(full_teams))
+        & (filtered_df["chance_of_playing_next_round"] >= 75)
     ].copy()
     candidates["score"] = candidates["points_per_game"] / candidates["difficulty"]
     return candidates.sort_values(["score", "price"], ascending=[False, True]).head(3)
@@ -146,10 +154,59 @@ suggestions_df = pd.DataFrame(suggestions)
 suggestions_df["gain"] = suggestions_df["buy_score"] - suggestions_df["own_score"]
 print(suggestions_df.sort_values("gain", ascending=False))
 
+best_move = suggestions_df.sort_values("gain", ascending=False).iloc[0]
+summary_df = pd.DataFrame({
+    "Metric": ["Team", "Gameweek", "Total points", "Bank (million)", "Best transfer", "Gain in score"],
+    "Value": [entry_data["name"], gw, entry_data["summary_overall_points"], bank, best_move["sell"] + " -> " + best_move["buy"], round(best_move["gain"], 2)],
+})
+
+not_owned = filtered_df[(~filtered_df["web_name"].isin(my_team["web_name"])) & (filtered_df["chance_of_playing_next_round"] >= 75)]
+best_idx = not_owned.groupby(["position", "price_band"], observed=True)["points_per_million"].idxmax()
+best_alt = not_owned.loc[best_idx, ["position", "price_band", "web_name", "points_per_million"]]
+mine = filtered_df[filtered_df["web_name"].isin(my_team["web_name"])][["web_name", "position", "price_band", "points_per_million"]]
+comparison = mine.merge(best_alt, on=["position", "price_band"], how="left", suffixes=("_mine", "_best")).sort_values(["position", "points_per_million_mine"], ascending=[True, False])
+
+report_sheets = {
+    "Summary": summary_df,
+    "Transfers": suggestions_df.sort_values("gain", ascending=False).rename(columns={
+        "sell": "Sell", "own_score": "Own score", "buy": "Buy", "buy_price": "Buy price (m)", "buy_score": "Buy score", "gain": "Gain"}),
+    "My team": comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]].rename(columns={
+        "web_name_mine": "Player", "position": "Position", "price_band": "Price band", "points_per_million_mine": "Points per million",
+        "web_name_best": "Best alternative", "points_per_million_best": "Alternative points per million"}),
+    "Best by price band": best_by_band[["position", "price_band", "web_name", "team_name", "price", "points_per_million"]].rename(columns={
+        "position": "Position", "price_band": "Price band", "web_name": "Player", "team_name": "Team", "price": "Price (m)", "points_per_million": "Points per million"}),
+    "Fixtures": team_difficulty.sort_values("difficulty")[["team_name", "difficulty"]].rename(columns={
+        "team_name": "Team", "difficulty": "Average difficulty, next 3 rounds"}),
+}
+tab_colors = ["1F4E78", "2E75B6", "548235", "BF8F00", "C00000"]
+green_to_red = ColorScaleRule(start_type="min", start_color="63BE7B", mid_type="percentile", mid_value=50, mid_color="FFFFFF", end_type="max", end_color="F8696B")
+red_to_green = ColorScaleRule(start_type="min", start_color="F8696B", mid_type="num", mid_value=0, mid_color="FFFFFF", end_type="max", end_color="63BE7B")
+
 with pd.ExcelWriter("fpl_report.xlsx", engine="openpyxl") as writer:
-    suggestions_df.sort_values("gain", ascending=False).to_excel(writer, sheet_name="Transfers", index=False)
-    comparison[["web_name_mine", "position", "price_band", "points_per_million_mine", "web_name_best", "points_per_million_best"]].to_excel(writer, sheet_name="My team", index=False)
-    best_by_band[["position", "price_band", "web_name", "team_name", "price", "points_per_million"]].to_excel(writer, sheet_name="Best by price band", index=False)
-    team_difficulty.sort_values("difficulty").to_excel(writer, sheet_name="Fixtures", index=False)
+    for i, (name, df) in enumerate(report_sheets.items()):
+        df.to_excel(writer, sheet_name=name, index=False, startrow=2)
+        sheet = writer.sheets[name]
+        sheet["A1"] = f"FPL report: {entry_data['name']}" if name == "Summary" else name
+        sheet["A1"].font = Font(size=16, bold=True, color="1F4E78")
+        sheet["A2"] = f"Gameweek {gw}. Data from the official FPL API."
+        sheet["A2"].font = Font(italic=True, color="808080")
+        sheet.sheet_view.showGridLines = False
+        sheet.sheet_properties.tabColor = tab_colors[i]
+        for column in sheet.iter_cols(min_row=3):
+            longest = max(len(f"{cell.value:.2f}") if isinstance(cell.value, float) else len(str(cell.value)) for cell in column if cell.value is not None)
+            sheet.column_dimensions[column[0].column_letter].width = longest + 4
+            for cell in column[1:]:
+                if isinstance(cell.value, float):
+                    cell.number_format = "0.00"
+        last_cell = sheet.cell(row=sheet.max_row, column=sheet.max_column).coordinate
+        table = Table(displayName=f"Table{i}", ref=f"A3:{last_cell}")
+        table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
+        sheet.add_table(table)
+        sheet.freeze_panes = "A4"
+    transfers = writer.sheets["Transfers"]
+    transfers.conditional_formatting.add(f"F4:F{transfers.max_row}", red_to_green)
+    fixtures = writer.sheets["Fixtures"]
+    fixtures.conditional_formatting.add(f"B4:B{fixtures.max_row}", green_to_red)
 print("Report saved: fpl_report.xlsx")
 
+print(filtered_df[filtered_df["chance_of_playing_next_round"] < 75][["web_name", "team_name", "chance_of_playing_next_round", "news"]])
