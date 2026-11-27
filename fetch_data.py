@@ -231,4 +231,3 @@ with pd.ExcelWriter("fpl_report.xlsx", engine="openpyxl") as writer:
     fixtures.conditional_formatting.add(f"B4:B{fixtures.max_row}", green_to_red)
 print("Report saved: fpl_report.xlsx")
 
-print(filtered_df[filtered_df["web_name"] == "Wirtz"][["web_name", "team_name", "position", "price", "price_band", "points_per_million", "chance_of_playing_next_round"]])
